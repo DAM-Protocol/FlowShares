@@ -5,6 +5,8 @@ require("@nomiclabs/hardhat-waffle");
 require("hardhat-gas-reporter");
 require("solidity-coverage");
 
+const { parseUnits } = require("ethers/lib/utils");
+
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
@@ -16,8 +18,9 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: process.env.MUMBAI_URL || "",
-        enabled: false,
+        url: process.env.POLYGON_URL || "",
+        enabled: true,
+        blockNumber: 23231719
       },
       blockGasLimit: 20000000,
       gasPrice: 30000000000,
@@ -28,12 +31,12 @@ module.exports = {
       url: process.env.MUMBAI_URL,
       accounts: [`0x${process.env.TESTNET_PRIVATE_KEY}`]
     },
-    polygon: {
-      url: process.env.POLYGON_URL,
-      blockGasLimit: 20000000,
-      gasPrice: 35000000000,
-      accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
-    }
+    // polygon: {
+    //   url: process.env.POLYGON_URL,
+    //   blockGasLimit: 20000000,
+    //   gasPrice: 35000000000,
+    //   accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`]
+    // }
   },
   gasReporter: {
     enabled: process.env.REPORT_GAS !== undefined,
@@ -42,4 +45,7 @@ module.exports = {
   etherscan: {
     apiKey: process.env.POLYGONSCAN_API_KEY,
   },
+  mocha: {
+    timeout: 0
+  }
 };
