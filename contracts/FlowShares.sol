@@ -7,7 +7,6 @@ import {IInstantDistributionAgreementV1} from "@superfluid-finance/ethereum-cont
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "hardhat/console.sol";
 
 /**
@@ -18,8 +17,6 @@ import "hardhat/console.sol";
  */
 // solhint-disable not-rely-on-time
 contract FlowShares is Ownable, SuperAppBase {
-    using SafeERC20 for ERC20;
-
     uint32 public constant DIST_INDEX_ID = 0;
     address public immutable streamToken;
     address public immutable distToken;
@@ -69,12 +66,53 @@ contract FlowShares is Ownable, SuperAppBase {
         );
     }
 
-    function calcUserUninvested(
-        uint256 _userPrevUpdateTimestamp,
-        uint256 _flowRate
-    ) public view returns (uint256 _userUninvested) {
+    function distribute() public returns (bytes memory _newCtx) {
+        ISuperToken superDistToken = ISuperToken(distToken);
+
+        console.log("Reaching here 4.2");
+        (uint256 actualAmount, ) = ida.calculateDistribution(
+            superDistToken,
+            address(this),
+            DIST_INDEX_ID,
+            superDistToken.balanceOf(address(this))
+        );
+
+        console.log("Actual amount: %s", actualAmount);
+        console.log("SuperToken balance: %s", superDistToken.balanceOf(address(this)));
+        require(
+            superDistToken.balanceOf(address(this)) >= actualAmount,
+            "FlowShares: !enough distTokens"
+        );
+
+        console.log("Reaching here 4.3");
+
+        _newCtx = host.callAgreement(
+            ida,
+            abi.encodeWithSelector(
+                ida.distribute.selector,
+                superDistToken,
+                DIST_INDEX_ID,
+                actualAmount,
+                new bytes(0)
+            ),
+            new bytes(0)
+        );
+
+        lastDistAt = block.timestamp;
+
+        console.log("Reaching here 4.4");
+    }
+
+    function calcUserUninvested(address _user)
+        public
+        view
+        returns (uint256 _userUninvested)
+    {
+        (uint256 _userPrevUpdateTimestamp, int96 _flowRate) = _getFlow(_user);
+        uint256 _userFlowRate = uint256(uint96(_flowRate));
+
         _userUninvested =
-            _flowRate *
+            _userFlowRate *
             (block.timestamp -
                 (
                     (_userPrevUpdateTimestamp > lastDistAt)
@@ -105,7 +143,7 @@ contract FlowShares is Ownable, SuperAppBase {
         console.log("Reaching here 4.1");
 
         if (totalUnitsApproved + totalUnitsPending > 0 && balance > 0)
-            _distribute();
+            _newCtx = distribute();
 
         console.log("Reaching here 4.5");
 
@@ -126,40 +164,6 @@ contract FlowShares is Ownable, SuperAppBase {
         console.log("Reaching here 4.6");
     }
 
-    function _distribute() internal returns (bytes memory _newCtx) {
-        ISuperToken superDistToken = ISuperToken(distToken);
-
-        console.log("Reaching here 4.2");
-        (uint256 actualAmount, ) = ida.calculateDistribution(
-            superDistToken,
-            address(this),
-            DIST_INDEX_ID,
-            superDistToken.balanceOf(address(this))
-        );
-
-        require(
-            superDistToken.balanceOf(address(this)) >= actualAmount,
-            "FlowShares: !enough distTokens"
-        );
-
-        console.log("Reaching here 4.3");
-
-        _newCtx = host.callAgreement(
-            ida,
-            abi.encodeWithSelector(
-                ida.distribute.selector,
-                superDistToken,
-                DIST_INDEX_ID,
-                new bytes(0)
-            ),
-            new bytes(0)
-        );
-
-        lastDistAt = block.timestamp;
-
-        console.log("Reaching here 4.4");
-    }
-
     function _afterAgreement(bytes memory _ctx, bytes memory _cbdata)
         internal
         returns (bytes memory _newCtx)
@@ -178,14 +182,17 @@ contract FlowShares is Ownable, SuperAppBase {
         returns (bytes memory _cbdata)
     {
         address msgSender = host.decodeCtx(_ctx).msgSender;
-        (uint256 timestamp, int96 flowRate) = _getFlow(msgSender);
 
         _cbdata = abi.encode(
-            calcUserUninvested(timestamp, uint256(uint96(flowRate)))
+            calcUserUninvested(msgSender)
         );
     }
 
-    function _getFlow(address _user) internal view returns (uint256 _timestamp, int96 _flowRate) {
+    function _getFlow(address _user)
+        internal
+        view
+        returns (uint256 _timestamp, int96 _flowRate)
+    {
         (_timestamp, _flowRate, , ) = cfa.getFlow(
             ISuperToken(streamToken),
             _user,
@@ -193,9 +200,8 @@ contract FlowShares is Ownable, SuperAppBase {
         );
 
         // There shouldn't be any outflow from the contract
-        assert(_flowRate >= 0); 
+        assert(_flowRate >= 0);
     }
-
 
     function _onlyExpected(ISuperToken _superToken, address _agreementClass)
         internal
@@ -227,7 +233,6 @@ contract FlowShares is Ownable, SuperAppBase {
     function _onlyHost() internal view {
         require(msg.sender == address(host), "FlowShares: Not host");
     }
-
 
     /********************************************
      * Superfluid app callbacks
@@ -301,7 +306,7 @@ contract FlowShares is Ownable, SuperAppBase {
         bytes32, // agreementId,
         bytes calldata, // agreementData,
         bytes calldata _ctx
-    ) external view override returns(bytes memory _cbdata) {
+    ) external view override returns (bytes memory _cbdata) {
         _onlyHost();
         _onlyExpected(_superToken, _agreementClass);
 
