@@ -68,7 +68,6 @@ contract FlowShares is Ownable, SuperAppBase {
     function distribute() public returns (bytes memory _newCtx) {
         ISuperToken superDistToken = ISuperToken(distToken);
 
-        console.log("Reaching here 4.2");
         (uint256 actualAmount, ) = ida.calculateDistribution(
             superDistToken,
             address(this),
@@ -80,8 +79,6 @@ contract FlowShares is Ownable, SuperAppBase {
             superDistToken.balanceOf(address(this)) >= actualAmount,
             "FlowShares: !enough distTokens"
         );
-
-        console.log("Reaching here 4.3");
 
         _newCtx = host.callAgreement(
             ida,
@@ -96,8 +93,6 @@ contract FlowShares is Ownable, SuperAppBase {
         );
 
         lastDistAt = block.timestamp;
-
-        console.log("Reaching here 4.4");
     }
 
     function calcUserUninvested(address _user)
@@ -116,8 +111,6 @@ contract FlowShares is Ownable, SuperAppBase {
                         ? _userPrevUpdateTimestamp
                         : lastDistAt
                 ));
-
-        console.log("Uninvested amount is: %s", _userUninvested);
     }
 
     function _updateShares(bytes memory _ctx)
@@ -128,8 +121,6 @@ contract FlowShares is Ownable, SuperAppBase {
         address msgSender = host.decodeCtx(_ctx).msgSender;
         (, int96 flowRate) = _getFlow(msgSender);
         uint256 userFlowRate = uint256(uint96(flowRate));
-
-        console.log("Reaching here 4");
 
         (_newCtx, ) = host.callAgreementWithContext(
             ida,
@@ -144,8 +135,6 @@ contract FlowShares is Ownable, SuperAppBase {
             new bytes(0),
             _ctx
         );
-
-        console.log("Reaching here 4.1");
     }
 
     function _afterAgreement(bytes memory _ctx, bytes memory _cbdata)
@@ -229,15 +218,10 @@ contract FlowShares is Ownable, SuperAppBase {
         bytes calldata, // agreementData,
         bytes calldata // ctx
     ) external view override returns (bytes memory _cbdata) {
-        console.log("Reaching here 1");
         _onlyHost();
         _onlyExpected(_superToken, _agreementClass);
 
-        console.log("Reaching here 1.1");
-
         _cbdata = new bytes(0);
-
-        console.log("Reaching here 2");
     }
 
     function afterAgreementCreated(
@@ -251,10 +235,7 @@ contract FlowShares is Ownable, SuperAppBase {
         _onlyHost();
         _onlyExpected(_superToken, _agreementClass);
 
-        console.log("Reaching here 3");
         _newCtx = _updateShares(_ctx);
-
-        console.log("Reaching here 5");
     }
 
     function beforeAgreementUpdated(
