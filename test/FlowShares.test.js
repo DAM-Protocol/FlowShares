@@ -649,7 +649,7 @@ describe("FlowShares Testing", () => {
             expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
         });
 
-        it.only("should be able to calculate uninvested amounts correctly after distribution - multi user", async() => {
+        it("should be able to calculate uninvested amounts correctly after distribution - multi user", async() => {
             await loadFixture(setupEnv);
 
             await sf.idaV1.approveSubscription({
