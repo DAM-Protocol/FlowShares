@@ -156,135 +156,98 @@ describe("FlowShares Testing", () => {
         return response;
     }
 
-    it("should create an index after deployment", async () => {
-        await loadFixture(setupEnv);
+    describe("Basic Tests", async () => {
+        it("should create an index after deployment", async () => {
+            await loadFixture(setupEnv);
 
-        response = await getIndexDetails(USDC.superToken, "0");
+            response = await getIndexDetails(USDC.superToken, "0");
 
-        expect(response.exist).to.equal(true);
+            expect(response.exist).to.equal(true);
+        });
+
+        it("should be able to start/update/terminate streams", async () => {
+            await loadFixture(setupEnv);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await getIndexDetails(USDC.superToken, "0");
+
+            await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+        });
+
+        it("should calculate units correctly", async () => {
+            await loadFixture(setupEnv);
+    
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale);
+    
+            response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+    
+            expect(response.approved).to.equal(true);
+            expect(response.units).to.equal("0");
+    
+            userFlowRate = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
+    
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: userFlowRate
+            }).exec(DAIWhale);
+    
+            response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+    
+            expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
+    
+            userFlowRate = parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30));
+    
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: userFlowRate
+            }).exec(DAIWhale);
+    
+            response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+    
+            expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
+    
+            userFlowRate = constants.Zero;
+    
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+    
+            response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
+    
+            expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
+        });
     });
 
-    it("should be able to start/update/terminate streams", async () => {
-        await loadFixture(setupEnv);
-
-        await sf.cfaV1.createFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
-        }).exec(DAIWhale);
-
-        await getIndexDetails(USDC.superToken, "0");
-
-        await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        await sf.cfaV1.updateFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
-        }).exec(DAIWhale);
-
-        await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        await sf.cfaV1.deleteFlow({
-            superToken: DAI.superToken,
-            sender: DAIWhale.address,
-            receiver: app.address
-        }).exec(DAIWhale);
-
-        await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-    });
-
-    it("should calculate uninvested amount correctly - 1", async () => {
-        await loadFixture(setupEnv);
-
-        await sf.cfaV1.createFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
-        }).exec(DAIWhale);
-
-        await increaseTime(getSeconds(30));
-
-        expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
-
-        await sf.cfaV1.updateFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
-        }).exec(DAIWhale);
-
-        expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-        await increaseTime(getSeconds(30));
-
-        expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
-
-        await sf.cfaV1.deleteFlow({
-            superToken: DAI.superToken,
-            sender: DAIWhale.address,
-            receiver: app.address
-        }).exec(DAIWhale);
-
-        expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-        await increaseTime(getSeconds(30));
-
-        expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
-
-    });
-
-    it("should calculate units correctly", async () => {
-        await loadFixture(setupEnv);
-
-        await sf.idaV1.approveSubscription({
-            indexId: "0",
-            superToken: USDC.superToken,
-            publisher: app.address
-        }).exec(DAIWhale);
-
-        response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        expect(response.approved).to.equal(true);
-        expect(response.units).to.equal("0");
-
-        userFlowRate = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
-
-        await sf.cfaV1.createFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: userFlowRate
-        }).exec(DAIWhale);
-
-        response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
-
-        userFlowRate = parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30));
-
-        await sf.cfaV1.updateFlow({
-            superToken: DAI.superToken,
-            receiver: app.address,
-            flowRate: userFlowRate
-        }).exec(DAIWhale);
-
-        response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
-
-        userFlowRate = constants.Zero;
-
-        await sf.cfaV1.deleteFlow({
-            superToken: DAI.superToken,
-            sender: DAIWhale.address,
-            receiver: app.address
-        }).exec(DAIWhale);
-
-        response = await getUserUnits(USDC.superToken, "0", DAIWhale.address);
-
-        expect(response.units).to.be.closeTo(userFlowRate.div(parseUnits("1", 9)), constants.One);
-    });
-
-    describe.only("Distribution Tests", () => {
+    describe("Distribution Tests", () => {
         it("should be able to distribute tokens", async () => {
             await loadFixture(setupEnv);
 
@@ -314,18 +277,16 @@ describe("FlowShares Testing", () => {
             await increaseTime(getSeconds(30));
 
             balanceBefore = await USDCx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
-            console.log("Balance before: ", balanceBefore);
 
             await app.distribute();
 
             balanceAfter = await USDCx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
-            console.log("Balance after: ", balanceAfter);
 
             expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
             expect(await USDCx.balanceOf({ account: app.address, providerOrSigner: ethersProvider })).to.be.closeTo(constants.Zero, parseUnits("1", 9));
         });
 
-        it("should be able to distribute tokens to multiple streamers correctly", async() => {
+        it("should be able to distribute tokens to multiple streamers correctly", async () => {
             await loadFixture(setupEnv);
 
             userFlowRate1 = parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30));
@@ -370,21 +331,420 @@ describe("FlowShares Testing", () => {
 
             balanceBefore1 = await USDCx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
             balanceBefore2 = await USDCx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
-            console.log("Balance before 1: ", balanceBefore1);
-            console.log("Balance before 2: ", balanceBefore2);
 
             await app.distribute();
 
             balanceAfter1 = await USDCx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
             balanceAfter2 = await USDCx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
 
-            console.log("Balance after 1: ", balanceAfter1);
-            console.log("Balance after 2: ", balanceAfter2);
-
             expect(getBigNumber(balanceAfter1).sub(getBigNumber(balanceBefore1))).to.be.closeTo(parseUnits("66", 18), parseUnits("1", 18));
             expect(getBigNumber(balanceAfter2).sub(getBigNumber(balanceBefore2))).to.be.closeTo(parseUnits("33", 18), parseUnits("1", 18));
             expect(await USDCx.balanceOf({ account: app.address, providerOrSigner: ethersProvider })).to.be.closeTo(constants.Zero, parseUnits("1", 9));
         });
 
+    });
+
+    describe("Uninvested Amounts Tests", async() => {
+        it("should calculate uninvested amount correctly after stream updates- single user", async () => {
+            await loadFixture(setupEnv);
+    
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+    
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+    
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+    
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+    
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+    
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+    
+        });
+
+        it("should calculate uninvested amount correctly after stream updates- multi user", async () => {
+            await loadFixture(setupEnv);
+    
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+    
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+    
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("25", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("25", 18), parseUnits("1", 18));
+    
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale2.address,
+                receiver: app.address
+            }).exec(DAIWhale2);
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+    
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+        });
+
+        it("should return uninvested amount correctly after stream updates- single user", async() => {
+            await loadFixture(setupEnv);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale);
+            
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+    
+            await increaseTime(getSeconds(30));
+
+            balanceBefore = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+
+            uninvestedAmount = await app.calcUserUninvested(DAIWhale.address);
+
+            expect(uninvestedAmount).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+            
+            balanceAfter = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+
+            expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(uninvestedAmount, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            uninvestedAmount = await app.calcUserUninvested(DAIWhale.address);
+
+            expect(uninvestedAmount).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+
+            balanceBefore = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            balanceAfter = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+
+            expect(getBigNumber(balanceAfter).sub(getBigNumber(balanceBefore))).to.be.closeTo(uninvestedAmount, parseUnits("1", 18));
+        });
+
+        it("should return uninvested amount correctly after stream updates- multi user", async() => {
+            await loadFixture(setupEnv);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale2);
+            
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+    
+            await increaseTime(getSeconds(30));
+
+            balanceBefore1 = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+            balanceBefore2 = await DAIx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
+
+            uninvestedAmount1 = await app.calcUserUninvested(DAIWhale.address);
+            uninvestedAmount2 = await app.calcUserUninvested(DAIWhale2.address);
+
+            expect(uninvestedAmount1).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+            expect(uninvestedAmount2).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("25", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+            
+            balanceAfter1 = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+            balanceAfter2 = await DAIx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
+
+            expect(getBigNumber(balanceAfter1).sub(getBigNumber(balanceBefore1))).to.be.closeTo(uninvestedAmount1, parseUnits("1", 18));
+            expect(getBigNumber(balanceAfter2).sub(getBigNumber(balanceBefore2))).to.be.closeTo(uninvestedAmount2, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            uninvestedAmount1 = await app.calcUserUninvested(DAIWhale.address);
+            uninvestedAmount2 = await app.calcUserUninvested(DAIWhale2.address);
+
+            expect(uninvestedAmount1).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+            expect(uninvestedAmount2).to.be.closeTo(parseUnits("25", 18), parseUnits("1", 18));
+
+            balanceBefore1 = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+            balanceBefore2 = await DAIx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale2.address,
+                receiver: app.address
+            }).exec(DAIWhale2);
+
+            balanceAfter1 = await DAIx.balanceOf({ account: DAIWhale.address, providerOrSigner: ethersProvider });
+            balanceAfter2 = await DAIx.balanceOf({ account: DAIWhale2.address, providerOrSigner: ethersProvider });
+
+            expect(getBigNumber(balanceAfter1).sub(getBigNumber(balanceBefore1))).to.be.closeTo(uninvestedAmount1, parseUnits("1", 18));
+            expect(getBigNumber(balanceAfter2).sub(getBigNumber(balanceBefore2))).to.be.closeTo(uninvestedAmount2, parseUnits("1", 18));
+        });
+
+        it("should be able to calculate uninvested amounts correctly after distribution - single user", async() => {
+            await loadFixture(setupEnv);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await USDCx.transfer({
+                receiver: app.address,
+                amount: parseUnits("100", 18)
+            }).exec(USDCWhale);
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+
+            await app.distribute();
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+        
+            await USDCx.transfer({
+                receiver: app.address,
+                amount: parseUnits("100", 18)
+            }).exec(USDCWhale);
+
+            await app.distribute();
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+            
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+        });
+
+        it.only("should be able to calculate uninvested amounts correctly after distribution - multi user", async() => {
+            await loadFixture(setupEnv);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale);
+
+            await sf.idaV1.approveSubscription({
+                indexId: "0",
+                superToken: USDC.superToken,
+                publisher: app.address
+            }).exec(DAIWhale2);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("100", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.createFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+
+            await USDCx.transfer({
+                receiver: app.address,
+                amount: parseUnits("100", 18)
+            }).exec(USDCWhale);
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+
+            await app.distribute();
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("100", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("50", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.updateFlow({
+                superToken: DAI.superToken,
+                receiver: app.address,
+                flowRate: parseUnits("25", 18).div(getBigNumber(3600 * 24 * 30))
+            }).exec(DAIWhale2);
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("25", 18), parseUnits("1", 18));
+        
+            await USDCx.transfer({
+                receiver: app.address,
+                amount: parseUnits("100", 18)
+            }).exec(USDCWhale);
+
+            await app.distribute();
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+
+            await increaseTime(getSeconds(30));
+            
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(parseUnits("50", 18), parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(parseUnits("25", 18), parseUnits("1", 18));
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale.address,
+                receiver: app.address
+            }).exec(DAIWhale);
+
+            await sf.cfaV1.deleteFlow({
+                superToken: DAI.superToken,
+                sender: DAIWhale2.address,
+                receiver: app.address
+            }).exec(DAIWhale2);
+
+            expect(await app.calcUserUninvested(DAIWhale.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+            expect(await app.calcUserUninvested(DAIWhale2.address)).to.be.closeTo(constants.Zero, parseUnits("1", 18));
+        });
     });
 });

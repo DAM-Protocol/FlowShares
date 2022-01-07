@@ -53,7 +53,6 @@ contract FlowShares is Ownable, SuperAppBase {
             ? _host.registerAppWithKey(configWord, regKey)
             : _host.registerApp(configWord);
 
-        // Ricochet and Dividend Rights Token tutorial way of creating an index
         _host.callAgreement(
             _ida,
             abi.encodeWithSelector(
@@ -77,8 +76,6 @@ contract FlowShares is Ownable, SuperAppBase {
             superDistToken.balanceOf(address(this))
         );
 
-        console.log("Actual amount: %s", actualAmount);
-        console.log("SuperToken balance: %s", superDistToken.balanceOf(address(this)));
         require(
             superDistToken.balanceOf(address(this)) >= actualAmount,
             "FlowShares: !enough distTokens"
@@ -134,19 +131,6 @@ contract FlowShares is Ownable, SuperAppBase {
 
         console.log("Reaching here 4");
 
-        (, , uint128 totalUnitsApproved, uint128 totalUnitsPending) = ida
-            .getIndex(superDistToken, address(this), DIST_INDEX_ID);
-
-        uint256 balance = superDistToken.balanceOf(address(this)) /
-            (10**(18 - ERC20(superDistToken.getUnderlyingToken()).decimals()));
-
-        console.log("Reaching here 4.1");
-
-        if (totalUnitsApproved + totalUnitsPending > 0 && balance > 0)
-            _newCtx = distribute();
-
-        console.log("Reaching here 4.5");
-
         (_newCtx, ) = host.callAgreementWithContext(
             ida,
             abi.encodeWithSelector(
@@ -161,7 +145,7 @@ contract FlowShares is Ownable, SuperAppBase {
             _ctx
         );
 
-        console.log("Reaching here 4.6");
+        console.log("Reaching here 4.1");
     }
 
     function _afterAgreement(bytes memory _ctx, bytes memory _cbdata)
